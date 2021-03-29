@@ -1,0 +1,37 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  labels:
+    job: db-migrator-cleanup
+  annotations:
+    # This is what defines this resource as a hook. Without this line, the
+    # job is considered part of the release.
+    "helm.sh/hook": post-delete
+    "helm.sh/hook-weight": "-5"
+    "helm.sh/hook-delete-policy": hook-succeeded
+  name: {{ include "helm-hooks.fullname" . }}-cleanup-{{ .Values.migration.version | replace "." "-"}}
+spec:
+  template:
+    metadata:
+      labels:
+        job: db-migrator
+        job-name: {{ include "helm-hooks.fullname" . }}-cleanup-{{ .Values.migration.version | replace "." "-"}}
+    spec:
+      restartPolicy: Never
+      containers:
+      - args:
+        - dotnet ef database drop -f
+        command:
+        - /bin/sh
+        - -c
+        env:
+        - name: db_password
+          valueFrom:
+            secretKeyRef:
+              key: sapassword
+              name: mssql-mssql-linux-secret
+        - name: ConnectionStrings__DefaultConnection
+          value: "Server=mssql-mssql-linux;Database=CU-MVC;MultipleActiveResultSets=true;User Id=sa;Password=$(db_password)"
+        image: yahyaozturk/db-migrator
+        imagePullPolicy: {{ .Values.image.pullPolicy }}
+        name: db-migrator
